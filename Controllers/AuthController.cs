@@ -1,7 +1,9 @@
 ﻿using EFCore.Identity.WebAPI.Dtos;
 using EFCore.Identity.WebAPI.Models;
+using EFCore.Identity.WebAPI.Utilities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace EFCore.Identity.WebAPI.Controllers
 {
@@ -9,10 +11,12 @@ namespace EFCore.Identity.WebAPI.Controllers
     [ApiController]
     public class AuthController : ControllerBase
     {
-        UserManager<AppUser> _userManager;
-        public AuthController(UserManager<AppUser> userManager)
+        private UserManager<AppUser> _userManager;
+        private SignInManager<AppUser> _signInManager;
+        public AuthController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager)
         {
             _userManager = userManager;
+            _signInManager = signInManager;
         }
 
         [HttpPost]
@@ -33,7 +37,7 @@ namespace EFCore.Identity.WebAPI.Controllers
                 return BadRequest(result.Errors);
             }
             await Task.CompletedTask;
-            return Ok("Registration completed successfully");
+            return Ok(new { Message = "Registration completed successfully" });
         }
 
 
@@ -55,7 +59,77 @@ namespace EFCore.Identity.WebAPI.Controllers
             }
 
             return Ok(new { Message = "Password changed successfully" });
+        }
+        [HttpGet]
+        public async Task<IActionResult> ForgotPassword(string email, CancellationToken cancellationToken)
+        {
 
+            AppUser? appUser = await _userManager.FindByEmailAsync(email);
+            if (appUser is null)
+            {
+                return BadRequest(new { Message = "User cannot find" });
+            }
+            string token = await _userManager.GeneratePasswordResetTokenAsync(appUser);
+
+            string newPassword = PasswordGenerator.GenerateRandomPassword(8);
+            IdentityResult result = await _userManager.ResetPasswordAsync(appUser, token, newPassword);
+            if (!result.Succeeded)
+            {
+                return BadRequest(result.Errors.Select(x => x.Description).ToList());
+            }
+            return Ok(new { Message = $"New Password: {newPassword}" });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Login(LoginDto request, CancellationToken cancellationToken)
+        {
+            AppUser? appUser = await _userManager.Users
+                .FirstOrDefaultAsync(p => p.UserName == request.UserNameOrEmail ||
+                p.Email == request.UserNameOrEmail, cancellationToken);
+
+            if (appUser is null)
+            {
+                return BadRequest(new { Message = "User cannot find" });
+            }
+            bool passwordCheck = await _userManager.CheckPasswordAsync(appUser, request.Password);
+            if (!passwordCheck)
+            {
+                return BadRequest(new { Message = "Password is wrong" });
+            }
+
+            return Ok(new { Token = "Token" });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> LoginWithSignInManager(LoginDto request, CancellationToken cancellationToken)
+        {
+            AppUser? appUser = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.UserName == request.UserNameOrEmail ||
+                u.Email == request.UserNameOrEmail, cancellationToken);
+            if (appUser is null)
+            {
+                return BadRequest(new { Message = "User cannot find" });
+            }
+            Microsoft.AspNetCore.Identity.SignInResult result = await _signInManager.CheckPasswordSignInAsync(appUser, request.Password, true);
+
+            if (result.IsLockedOut)
+            {
+                //var lockoutEndLocal = DateTime.Now.AddMinutes(1); // Yerel saat diliminde ekleme
+                //await _userManager.SetLockoutEndDateAsync(appUser, lockoutEndLocal);
+
+                return StatusCode(500, "Your account has been locked for 5 minutes because you entered your password incorrectly 3 times.");
+            }
+            if (!result.Succeeded)
+            {
+                return StatusCode(500, "Password is wrong");
+            }
+            if (result.IsNotAllowed)
+            {
+                return StatusCode(500, "You must confirm your e-mail address.");
+            }
+            return Ok(new { Token = "Token" });
         }
     }
+
+
 }

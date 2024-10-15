@@ -17,7 +17,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServer"));
 });
 
-builder.Services.AddIdentity<AppUser, IdentityRole<Guid>>(options =>
+builder.Services.AddIdentity<AppUser, AppRole>(options =>
 {
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequireDigit = false;
@@ -25,10 +25,14 @@ builder.Services.AddIdentity<AppUser, IdentityRole<Guid>>(options =>
     options.Password.RequireUppercase = false;
     options.Password.RequiredLength = 1;
 
-    options.SignIn.RequireConfirmedEmail = false;
     options.User.RequireUniqueEmail = true;
 
-}).AddEntityFrameworkStores<ApplicationDbContext>();
+    options.SignIn.RequireConfirmedEmail = true;
+    options.Lockout.MaxFailedAccessAttempts = 3;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+
+
+}).AddEntityFrameworkStores<ApplicationDbContext>().AddDefaultTokenProviders();
 
 var app = builder.Build();
 

@@ -9,9 +9,3 @@ namespace EFCore.Identity.WebAPI.Models
         public string FullName => string.Join(" ", FirstName, LastName);
     }
 }
-public static class UserRoles
-{
-    public const string Admin = "Admin";
-    public const string Member = "Member";
-
-}
